@@ -1,3 +1,8 @@
+"""Primary MediAssist entrypoint.
+
+Run this file for the final project app.
+"""
+
 import json
 from pathlib import Path
 from typing import Any, Dict, List

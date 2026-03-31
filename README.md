@@ -13,14 +13,24 @@ AI Healthcare Decision & Monitoring System with unified features:
 - Elderly fall detection
 - Voice assistant simulation
 
-## Repo Entry Points
+## Final Entry Point
 
-- `app.py`: primary project app. It supports both:
-  - `python app.py` for the built-in WSGI server
-  - `uvicorn app:app --reload` for ASGI/FastAPI-style serving
-- `app_web.py`: extended Flask-based demo interface on port `5000`
-- `index.html`: standalone UI template used by `app.py`
-- `frontend/`: additional static frontend assets copied with the project
+Use `app.py` as the final project application.
+
+It supports both of these run modes:
+- `python app.py` for the built-in server at `http://127.0.0.1:8000`
+- `uvicorn app:app --reload` for ASGI serving
+
+## Optional Demo Surface
+
+`app_web.py` is kept as an optional extended Flask demo UI. It is not the primary entrypoint for the final project.
+
+## Main Files
+
+- `app.py`: primary backend and UI host
+- `index.html`: primary frontend template used by `app.py`
+- `core.py`, `support.py`, `scenarios.py`, `utils.py`: healthcare logic modules
+- `frontend/`: extra static frontend assets retained from the imported project
 
 ## Run
 

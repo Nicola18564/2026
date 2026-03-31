@@ -1,3 +1,8 @@
+"""Optional Flask demo UI for MediAssist.
+
+This file is kept as a secondary demo surface; `app.py` is the final entrypoint.
+"""
+
 from PIL import Image, ImageStat, UnidentifiedImageError
 from flask import Flask, jsonify, request, render_template_string
 
