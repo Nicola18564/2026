@@ -417,17 +417,25 @@ HTML = """
     let recognitionActive = false;
     let pendingAutoStart = false;
     let preferredLadyVoice = null;
+    let voiceRetries = 0;
+    const maxVoiceRetries = 2;
+    const skipWords = ["skip", "not sure", "don't know", "do not know", "unknown", "next question"];
 
     const voiceFlow = [
-      { field: "query", question: "Please describe your main symptoms." },
-      { field: "age", question: "What is your age in years?" },
-      { field: "conditions", question: "Do you have any known conditions like diabetes, hypertension, or asthma?" },
-      { field: "heart_rate", question: "If available, what is your pulse or heart rate?" },
-      { field: "blood_pressure", question: "If known, what is your blood pressure? For example one twenty over eighty." },
-      { field: "temperature", question: "What is your body temperature in Celsius?" },
-      { field: "oxygen_saturation", question: "What is your oxygen saturation percentage?" },
-      { field: "mood", question: "How is your mood? stress, anxiety, or neutral?" },
-      { field: "goal", question: "Your goal: prevention, mobility, cardio, or general?" }
+      { field: "query", question: "Please describe your main symptoms.", required: true },
+      { field: "age", question: "What is your age in years?", required: true },
+      { field: "conditions", question: "Do you have any known conditions like diabetes, hypertension, or asthma? Say none if there are no known conditions.", required: true },
+      { field: "region", question: "What region or area are you in?", required: false },
+      { field: "resources", question: "What healthcare resources do you have, such as telehealth, caregiver, clinic, or ambulance?", required: false },
+      { field: "challenge", question: "Do you have any accessibility challenge such as vision, hearing, or mobility? Say none if not.", required: false },
+      { field: "case_type", question: "Is this related to an outbreak, epidemic, pandemic, or general case?", required: false },
+      { field: "event", question: "Was there any elderly fall, slip, or collapse event? Say none if not.", required: false },
+      { field: "heart_rate", question: "If available, what is your pulse or heart rate? You can also say skip.", required: false },
+      { field: "blood_pressure", question: "If known, what is your blood pressure? For example one twenty over eighty. You can also say skip.", required: false },
+      { field: "temperature", question: "What is your body temperature in Celsius? You can also say skip.", required: false },
+      { field: "oxygen_saturation", question: "What is your oxygen saturation percentage? You can also say skip.", required: false },
+      { field: "mood", question: "How is your mood? stress, anxiety, sad, burnout, or neutral?", required: false },
+      { field: "goal", question: "What is your health goal? prevention, mobility, cardio, weight loss, or general?", required: false }
     ];
 
     function getField(name) {
@@ -444,27 +452,43 @@ HTML = """
       return m ? `${m[1]}/${m[2]}` : "";
     }
 
+    function shouldSkipTranscript(transcript) {
+      const low = String(transcript || "").toLowerCase();
+      return skipWords.some((word) => low.includes(word));
+    }
+
     function applyVoiceAnswer(field, transcript) {
       const target = getField(field);
-      if (!target) return;
+      if (!target) return false;
 
       let value = transcript.trim();
-      if (!value) return;
+      if (!value) return false;
+
+      if (shouldSkipTranscript(value)) {
+        if (field === "conditions" || field === "challenge" || field === "event" || field === "case_type") {
+          target.value = "";
+        }
+        return true;
+      }
 
       if (field === "age" || field === "heart_rate" || field === "oxygen_saturation") {
         value = firstNumber(value);
       } else if (field === "temperature") {
         value = firstNumber(value);
       } else if (field === "blood_pressure") {
-        value = parseBloodPressure(value) || target.value;
+        value = parseBloodPressure(value) || "";
       } else if (field === "query") {
         const prev = (target.value || "").trim();
         value = prev ? `${prev}. ${value}` : value;
-      } else if (field === "mood" || field === "goal" || field === "conditions") {
+      } else if (field === "mood" || field === "goal" || field === "conditions" || field === "challenge" || field === "case_type") {
         value = value.toLowerCase();
       }
 
-      if (value) target.value = value;
+      if (!value && field !== "conditions" && field !== "challenge" && field !== "event" && field !== "case_type") {
+        return false;
+      }
+      target.value = value;
+      return true;
     }
 
     function appendToQuery(text) {
@@ -491,6 +515,36 @@ HTML = """
       const score = result.care_plan.risk_prediction.score;
       const doctor = result.care_plan.doctor_recommendation;
       return `Result: ${disease}. Risk ${risk} at ${score} percent. ${doctor}`;
+    }
+
+    function buildAssistantReply(transcript, result) {
+      const low = String(transcript || "").toLowerCase();
+      if (low.includes("doctor") || low.includes("specialist")) {
+        return result.care_plan.doctor_recommendation;
+      }
+      if (low.includes("medicine") || low.includes("medication") || low.includes("tablet") || low.includes("drug")) {
+        return `Suggested medications: ${result.care_plan.medication_suggestions.join(', ')}.`;
+      }
+      if (low.includes("risk") || low.includes("danger") || low.includes("serious")) {
+        return `Risk is ${result.care_plan.risk_prediction.level} at ${result.care_plan.risk_prediction.score} percent. ${result.care_plan.risk_prediction.advice}`;
+      }
+      if (low.includes("emergency") || low.includes("urgent") || low.includes("hospital")) {
+        return result.analysis.triage.message;
+      }
+      if (low.includes("mental") || low.includes("stress") || low.includes("anxiety") || low.includes("sad")) {
+        return result.health_support.mental_health.response;
+      }
+      if (low.includes("fitness") || low.includes("exercise") || low.includes("prevention")) {
+        return `Fitness and prevention advice: ${result.health_support.fitness_and_prevention.join(' ')}`;
+      }
+      if (low.includes("monitor") || low.includes("oxygen") || low.includes("pressure") || low.includes("pulse")) {
+        return `Monitoring update: ${result.care_plan.monitoring_alerts.join(' ')}`;
+      }
+      if (low.includes("what happened") || low.includes("what is result") || low.includes("disease") || low.includes("condition")) {
+        return `${buildVoiceSummary(result)} ${result.analysis.summary}`;
+      }
+      const firstGuide = result.care_plan.step_by_step_guidance[0] || result.analysis.summary;
+      return `${result.analysis.summary} First next step: ${firstGuide}`;
     }
 
     async function analyzeVoiceCase() {
@@ -607,12 +661,32 @@ HTML = """
       listenNow();
     }
 
+    async function repeatCurrentQuestion(reasonText) {
+      if (!voiceRunning || voiceMode !== "intake") return;
+      const item = voiceFlow[voiceIndex];
+      if (!item) return;
+      voiceStatus.textContent = reasonText || `Status: repeating question ${voiceIndex + 1}/${voiceFlow.length}`;
+      voiceQuestion.textContent = `Question: ${item.question}`;
+      await speakText(`I did not catch that clearly. ${item.question} You can also say skip.`);
+      listenNow();
+    }
+
+    async function movePastCurrentQuestion() {
+      const item = voiceFlow[voiceIndex];
+      voiceIndex += 1;
+      voiceRetries = 0;
+      if (item) {
+        voiceAnswer.textContent = `Last answer: ${item.field} captured`;
+      }
+      await askNextVoiceQuestion();
+    }
+
     async function switchToAssistantMode() {
       if (!voiceRunning) return;
       voiceMode = "assistant";
-      voiceQuestion.textContent = "Question: Tell me your new symptoms anytime. Say 'stop assistant' to end.";
+      voiceQuestion.textContent = "Question: Ask me anything about your result, medicine, doctor, risk, or new symptoms. Say stop assistant to end.";
       voiceStatus.textContent = "Status: always-on voice assistant active";
-      await speakText("Voice assistant is active. Tell me your new symptoms anytime and I will analyze the result.");
+      await speakText("Voice assistant is active. You can ask about your result, medicine, doctor, risk, mental health, or tell me new symptoms anytime.");
       listenNow();
     }
 
@@ -657,9 +731,19 @@ HTML = """
 
           if (voiceMode === "intake") {
             const item = voiceFlow[voiceIndex];
-            if (item && transcript) applyVoiceAnswer(item.field, transcript);
-            voiceIndex += 1;
-            await askNextVoiceQuestion();
+            const accepted = item && transcript ? applyVoiceAnswer(item.field, transcript) : false;
+            if (!accepted && item && item.required) {
+              voiceRetries += 1;
+              if (voiceRetries <= maxVoiceRetries) {
+                voiceAnswer.textContent = "Last answer: not clear, asking again";
+                await repeatCurrentQuestion(`Status: waiting for a clear answer to question ${voiceIndex + 1}/${voiceFlow.length}`);
+                return;
+              }
+            }
+            if (!accepted && item && !item.required) {
+              voiceAnswer.textContent = "Last answer: skipped";
+            }
+            await movePastCurrentQuestion();
             return;
           }
 
@@ -674,8 +758,11 @@ HTML = """
 
           if (spoken) appendToQuery(spoken);
           try {
-            await analyzeVoiceCase();
-            voiceStatus.textContent = "Status: processed voice input and announced result";
+            const result = await analyzeVoiceCase();
+            const reply = buildAssistantReply(transcript, result);
+            voiceStatus.textContent = "Status: processed voice input and answered your question";
+            if (voiceResult) voiceResult.textContent = `Result: ${reply}`;
+            await speakText(reply);
           } catch (error) {
             voiceStatus.textContent = "Status: processed voice input but analysis failed";
             if (voiceResult) voiceResult.textContent = "Result: analysis failed for the latest voice input.";
@@ -697,9 +784,15 @@ HTML = """
           }
 
           if (voiceMode === "intake") {
-            voiceAnswer.textContent = "Last answer: (not captured, moved next)";
-            voiceIndex += 1;
-            await askNextVoiceQuestion();
+            voiceRetries += 1;
+            if (voiceRetries <= maxVoiceRetries) {
+              voiceAnswer.textContent = "Last answer: not captured, asking again";
+              await repeatCurrentQuestion(`Status: retrying question ${voiceIndex + 1}/${voiceFlow.length}`);
+            } else {
+              voiceAnswer.textContent = "Last answer: skipped after retries";
+              await speakText("I will leave this answer blank and continue.");
+              await movePastCurrentQuestion();
+            }
           } else {
             setTimeout(() => {
               if (voiceRunning) listenNow();
@@ -712,9 +805,15 @@ HTML = """
           if (!voiceRunning) return;
 
           if (voiceMode === "intake" && !answerCaptured) {
-            voiceAnswer.textContent = "Last answer: (not captured, moved next)";
-            voiceIndex += 1;
-            await askNextVoiceQuestion();
+            voiceRetries += 1;
+            if (voiceRetries <= maxVoiceRetries) {
+              voiceAnswer.textContent = "Last answer: silence detected, asking again";
+              await repeatCurrentQuestion(`Status: waiting for answer to question ${voiceIndex + 1}/${voiceFlow.length}`);
+              return;
+            }
+            voiceAnswer.textContent = "Last answer: skipped after silence";
+            await speakText("No answer detected. I will leave this blank and continue.");
+            await movePastCurrentQuestion();
             return;
           }
 
@@ -729,6 +828,7 @@ HTML = """
       voiceRunning = true;
       voiceMode = startMode === "intake" ? "intake" : "assistant";
       voiceIndex = 0;
+      voiceRetries = 0;
       voiceStatus.textContent = "Status: starting always-on voice assistant...";
       if (voiceMode === "intake") {
         await askNextVoiceQuestion();
