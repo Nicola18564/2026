@@ -1,0 +1,556 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MediAssist OpenEnv | Hackathon Demo</title>
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Space+Grotesk:wght@500;700&display=swap");
+
+    :root {
+      --bg: #f5fbf8;
+      --surface: #ffffff;
+      --surface-2: #ecf7f2;
+      --ink: #12303b;
+      --muted: #4b6b75;
+      --line: #cde5dc;
+      --primary: #007a6b;
+      --primary-2: #10a08d;
+      --accent: #f18f01;
+      --danger: #c62828;
+      --radius-xl: 24px;
+      --radius-md: 14px;
+      --shadow: 0 20px 50px rgba(8, 68, 62, 0.13);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(1200px 600px at 10% -10%, #c7efe3 0%, transparent 60%),
+        radial-gradient(900px 500px at 90% -20%, #ffe2bb 0%, transparent 62%),
+        var(--bg);
+      font-family: Manrope, "Segoe UI", sans-serif;
+    }
+
+    .shell {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 26px 20px 40px;
+    }
+
+    .hero {
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      background: linear-gradient(135deg, #ffffff 0%, #f4fbf8 72%);
+      padding: 28px;
+      box-shadow: var(--shadow);
+      display: grid;
+      grid-template-columns: 1.45fr 1fr;
+      gap: 20px;
+      overflow: hidden;
+      position: relative;
+      animation: rise 500ms ease-out;
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      width: 280px;
+      height: 280px;
+      right: -95px;
+      top: -90px;
+      border-radius: 50%;
+      background: linear-gradient(45deg, rgba(16, 160, 141, 0.12), rgba(241, 143, 1, 0.12));
+    }
+
+    .kicker {
+      display: inline-flex;
+      gap: 8px;
+      align-items: center;
+      background: #daf4ed;
+      color: #005d51;
+      border: 1px solid #bce5da;
+      font-weight: 700;
+      font-size: 12px;
+      border-radius: 999px;
+      padding: 7px 12px;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+
+    .hero h1 {
+      font-family: "Space Grotesk", sans-serif;
+      margin: 14px 0 12px;
+      font-size: clamp(2rem, 4vw, 3.5rem);
+      line-height: 1.05;
+      max-width: 730px;
+    }
+
+    .hero p {
+      margin: 0;
+      max-width: 720px;
+      color: var(--muted);
+      line-height: 1.6;
+      font-size: 1.02rem;
+    }
+
+    .feature-pill-grid {
+      margin-top: 16px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .feature-pill {
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 12px;
+      padding: 9px 10px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #27515d;
+    }
+
+    .score-board {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: #fff;
+      padding: 14px;
+      align-self: center;
+    }
+
+    .score-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 9px 0;
+      border-bottom: 1px dashed #d5eae2;
+      font-size: 14px;
+    }
+
+    .score-row:last-child { border-bottom: 0; }
+
+    .stage {
+      margin-top: 18px;
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 18px;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      background: var(--surface);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow);
+      padding: 20px;
+      animation: rise 620ms ease-out;
+    }
+
+    .panel h2 {
+      margin: 0 0 4px;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 1.4rem;
+    }
+
+    .panel .sub {
+      margin: 0 0 14px;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+
+    .chip-btn {
+      border: 1px solid #b8ddd2;
+      border-radius: 999px;
+      background: #f7fffc;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #005d51;
+      cursor: pointer;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .field {
+      display: grid;
+      gap: 6px;
+    }
+
+    .field.full { grid-column: 1 / -1; }
+
+    .field label {
+      font-size: 12px;
+      color: #41606b;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    input, textarea {
+      width: 100%;
+      border: 1px solid #cfe5dd;
+      background: #fbfffd;
+      border-radius: 12px;
+      padding: 11px 12px;
+      color: var(--ink);
+      font: inherit;
+    }
+
+    textarea { resize: vertical; min-height: 86px; }
+
+    .actions { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 10px; }
+
+    button.action {
+      border: 0;
+      cursor: pointer;
+      border-radius: 12px;
+      padding: 11px 15px;
+      font-weight: 800;
+      font-family: "Space Grotesk", sans-serif;
+      letter-spacing: 0.02em;
+      transition: transform 160ms ease, box-shadow 160ms ease;
+    }
+
+    .action.primary {
+      background: linear-gradient(135deg, var(--primary), var(--primary-2));
+      color: #fff;
+      box-shadow: 0 10px 24px rgba(0, 122, 107, 0.25);
+    }
+
+    .action.secondary {
+      border: 1px solid #c9ded6;
+      background: #fff;
+      color: #234651;
+    }
+
+    .action:hover { transform: translateY(-1px); }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .kpi {
+      border: 1px solid #d7ebe4;
+      border-radius: 12px;
+      padding: 11px;
+      background: #fbfffd;
+    }
+
+    .kpi span { font-size: 12px; color: #4f6f79; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+    .kpi strong { display: block; margin-top: 6px; font-size: 1.2rem; }
+
+    .progress {
+      margin-top: 10px;
+      height: 9px;
+      border-radius: 999px;
+      background: #e3f1eb;
+      overflow: hidden;
+    }
+
+    .progress > i {
+      display: block;
+      height: 100%;
+      width: 0;
+      background: linear-gradient(90deg, var(--accent), #f8ad39);
+      transition: width 420ms ease;
+    }
+
+    .stream {
+      border: 1px solid #d3e8e0;
+      border-radius: 14px;
+      background: var(--surface-2);
+      padding: 12px;
+      min-height: 180px;
+      max-height: 330px;
+      overflow: auto;
+      display: grid;
+      gap: 10px;
+    }
+
+    .bubble {
+      padding: 10px 12px;
+      border-radius: 12px;
+      line-height: 1.45;
+      font-size: 14px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      animation: fadeSlide 260ms ease;
+    }
+
+    .bubble.user { background: #d7f3ea; justify-self: end; max-width: 86%; }
+    .bubble.bot { background: #ffffff; border: 1px solid #d3e8e0; max-width: 90%; }
+
+    .json {
+      margin-top: 12px;
+      border: 1px solid #d3e8e0;
+      border-radius: 14px;
+      background: #0f2b32;
+      color: #cbeef2;
+      padding: 12px;
+      max-height: 370px;
+      overflow: auto;
+      font-size: 12px;
+    }
+
+    .warning {
+      margin-top: 12px;
+      border-left: 4px solid var(--danger);
+      padding: 10px 12px;
+      background: #fff4f4;
+      color: #7e1a1a;
+      border-radius: 0 10px 10px 0;
+      font-size: 13px;
+    }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fadeSlide {
+      from { opacity: .1; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 1050px) {
+      .hero, .stage { grid-template-columns: 1fr; }
+      .kpi-grid { grid-template-columns: 1fr 1fr; }
+    }
+
+    @media (max-width: 700px) {
+      .shell { padding: 16px 12px 26px; }
+      .grid { grid-template-columns: 1fr; }
+      .kpi-grid { grid-template-columns: 1fr; }
+      .feature-pill-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <div>
+        <span class="kicker">Final Project • Unified Healthcare AI</span>
+        <h1>MediAssist OpenEnv: Decision + Monitoring Command Center</h1>
+        <p>
+          A single environment for disease detection, risk prediction, medication and doctor guidance,
+          mental wellness, preventive care, fall safety, and public-health scenarios.
+        </p>
+        <div class="feature-pill-grid">
+          <div class="feature-pill">Disease Detection + Confidence</div>
+          <div class="feature-pill">Step-by-Step Care Plan</div>
+          <div class="feature-pill">Rural + Accessibility Scenarios</div>
+          <div class="feature-pill">Voice Assistant (Text Simulation)</div>
+        </div>
+      </div>
+
+      <aside class="score-board">
+        <div class="score-row"><strong>Mode</strong><span>Judge Demo</span></div>
+        <div class="score-row"><strong>Core Modules</strong><span>12 Active</span></div>
+        <div class="score-row"><strong>Realtime API</strong><span id="healthStatus">Checking...</span></div>
+        <div class="score-row"><strong>Output</strong><span>Actionable Triage</span></div>
+      </aside>
+    </section>
+
+    <section class="stage">
+      <section class="panel">
+        <h2>Scenario Builder</h2>
+        <p class="sub">Load one-click cases or enter your own patient context.</p>
+
+        <div class="chips">
+          <button class="chip-btn" data-case="rural">Load Rural Case</button>
+          <button class="chip-btn" data-case="elderly">Load Elderly Fall Case</button>
+          <button class="chip-btn" data-case="wellness">Load Preventive Wellness</button>
+        </div>
+
+        <div class="grid">
+          <div class="field full">
+            <label for="query">Patient Narrative</label>
+            <textarea id="query" placeholder="Describe symptoms and context"></textarea>
+          </div>
+          <div class="field full">
+            <label for="symptoms">Symptoms (comma separated)</label>
+            <input id="symptoms" placeholder="fever, cough, dizziness" />
+          </div>
+          <div class="field"><label for="age">Age</label><input id="age" type="number" value="30" /></div>
+          <div class="field"><label for="bmi">BMI</label><input id="bmi" type="number" step="0.1" value="24" /></div>
+          <div class="field"><label for="conditions">Conditions</label><input id="conditions" placeholder="smoking, sedentary" /></div>
+          <div class="field"><label for="region">Region</label><input id="region" placeholder="village / city" /></div>
+          <div class="field"><label for="resources">Resources</label><input id="resources" placeholder="mobile clinic, nurse" /></div>
+          <div class="field"><label for="goal">Fitness Goal</label><input id="goal" value="prevention" /></div>
+          <div class="field"><label for="mood">Mental State</label><input id="mood" value="stress" /></div>
+          <div class="field"><label for="case_type">Public Health Case</label><input id="case_type" placeholder="outbreak / epidemic" /></div>
+          <div class="field"><label for="challenge">Accessibility Challenge</label><input id="challenge" placeholder="vision / hearing / mobility" /></div>
+          <div class="field"><label for="event">Elderly Event</label><input id="event" placeholder="fall detected" /></div>
+          <div class="field"><label for="heart_rate">Heart Rate</label><input id="heart_rate" type="number" /></div>
+          <div class="field"><label for="blood_pressure">Blood Pressure</label><input id="blood_pressure" placeholder="120/80" /></div>
+          <div class="field"><label for="temperature">Temperature (C)</label><input id="temperature" type="number" step="0.1" /></div>
+          <div class="field"><label for="oxygen_saturation">SpO2 (%)</label><input id="oxygen_saturation" type="number" /></div>
+        </div>
+
+        <div class="actions">
+          <button class="action primary" id="analyzeBtn">Run Full Assessment</button>
+          <button class="action secondary" id="voiceBtn">Simulate Voice Ask</button>
+          <button class="action secondary" id="emergencyBtn">Emergency Quick View</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Live Decision Feed</h2>
+        <p class="sub">Real-time output designed for fast presentation to judges.</p>
+
+        <div class="kpi-grid">
+          <article class="kpi"><span>Detected Condition</span><strong id="kpiDisease">-</strong></article>
+          <article class="kpi"><span>Risk Level</span><strong id="kpiRisk">-</strong></article>
+          <article class="kpi"><span>Confidence</span><strong id="kpiConfidence">-</strong></article>
+        </div>
+
+        <div class="progress"><i id="riskBar"></i></div>
+
+        <div class="stream" id="chatStream"></div>
+
+        <pre class="json" id="jsonBox">Waiting for first run...</pre>
+
+        <div class="warning">Educational assistant only. For emergencies, use local emergency services immediately.</div>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    const EXAMPLES = __EXAMPLES__;
+
+    const healthStatus = document.getElementById('healthStatus');
+    const chatStream = document.getElementById('chatStream');
+    const jsonBox = document.getElementById('jsonBox');
+
+    const fields = [
+      'query', 'symptoms', 'age', 'bmi', 'conditions', 'region', 'resources',
+      'challenge', 'case_type', 'event', 'goal', 'mood', 'heart_rate',
+      'blood_pressure', 'temperature', 'oxygen_saturation'
+    ];
+
+    function bubble(type, text) {
+      const el = document.createElement('div');
+      el.className = `bubble ${type}`;
+      el.textContent = text;
+      chatStream.appendChild(el);
+      chatStream.scrollTop = chatStream.scrollHeight;
+      return el;
+    }
+
+    function setCase(data) {
+      fields.forEach((id) => {
+        const input = document.getElementById(id);
+        if (!input) return;
+        const value = data[id];
+        if (Array.isArray(value)) {
+          input.value = value.join(', ');
+        } else {
+          input.value = value === undefined || value === null ? '' : value;
+        }
+      });
+      bubble('bot', 'Scenario loaded. Ready for live assessment.');
+    }
+
+    function payloadFromForm() {
+      const payload = {};
+      fields.forEach((id) => {
+        const value = document.getElementById(id).value;
+        payload[id] = value;
+      });
+      payload.age = Number(payload.age || 30);
+      payload.bmi = Number(payload.bmi || 24);
+      return payload;
+    }
+
+    function applyMetrics(data) {
+      const analysis = data.analysis || {};
+      const risk = (data.care_plan && data.care_plan.risk_prediction) || { level: '-', score: 0 };
+
+      document.getElementById('kpiDisease').textContent = analysis.disease || '-';
+      document.getElementById('kpiRisk').textContent = `${risk.level || '-'} (${risk.score || 0}%)`;
+      document.getElementById('kpiConfidence').textContent = `${analysis.confidence || 0}%`;
+      document.getElementById('riskBar').style.width = `${risk.score || 0}%`;
+    }
+
+    function narrateResult(data) {
+      const analysis = data.analysis || {};
+      const care = data.care_plan || {};
+      const support = data.health_support || {};
+      const scenario = data.scenarios || {};
+
+      bubble('bot', `Condition likely: ${analysis.disease || 'unclear'}. ${analysis.summary || ''}`);
+      if (care.doctor_recommendation) bubble('bot', `Doctor path: ${care.doctor_recommendation}`);
+      if (care.monitoring_alerts && care.monitoring_alerts.length) bubble('bot', `Monitoring: ${care.monitoring_alerts.join(' | ')}`);
+      if (support.mental_health && support.mental_health.response) bubble('bot', `Mental support: ${support.mental_health.response}`);
+      if (scenario.elderly_fall_detection) bubble('bot', `Fall detection: ${scenario.elderly_fall_detection}`);
+    }
+
+    async function runAssessment() {
+      const payload = payloadFromForm();
+      bubble('user', payload.query || payload.symptoms || 'Analyze this case');
+
+      const progress = bubble('bot', 'Analyzing symptoms... building risk and scenario response...');
+
+      try {
+        const res = await fetch('/api/ai', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        progress.textContent = 'Assessment complete. Output updated.';
+
+        applyMetrics(data);
+        narrateResult(data);
+        jsonBox.textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        progress.textContent = `API error: ${err.message}`;
+      }
+    }
+
+    function showEmergency() {
+      bubble('bot', 'Emergency Mode: call emergency services, keep airways clear, share vitals and symptoms now.');
+      document.getElementById('kpiRisk').textContent = 'Critical (100%)';
+      document.getElementById('riskBar').style.width = '100%';
+    }
+
+    function simulateVoice() {
+      const q = document.getElementById('query').value.trim() || 'help me with symptoms';
+      bubble('user', `[Voice] ${q}`);
+      bubble('bot', 'Voice simulation accepted. Running same pipeline via text understanding.');
+      runAssessment();
+    }
+
+    document.getElementById('analyzeBtn').addEventListener('click', runAssessment);
+    document.getElementById('voiceBtn').addEventListener('click', simulateVoice);
+    document.getElementById('emergencyBtn').addEventListener('click', showEmergency);
+
+    document.querySelectorAll('.chip-btn').forEach((btn) => {
+      btn.addEventListener('click', () => setCase(EXAMPLES[btn.dataset.case]));
+    });
+
+    fetch('/api/health')
+      .then((r) => r.json())
+      .then((data) => {
+        healthStatus.textContent = data.status === 'ok' ? 'Online' : 'Unknown';
+      })
+      .catch(() => {
+        healthStatus.textContent = 'Offline';
+      });
+
+    bubble('bot', 'MediAssist OpenEnv is live. Load a scenario or input a custom case.');
+  </script>
+</body>
+</html>
+
