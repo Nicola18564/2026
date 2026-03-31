@@ -372,14 +372,19 @@ HTML = """
           </div>
           <div style=\"font-size:12px;color:#4f6f79;\">Requires camera permission for pulse estimation. Temperature can come from connected device/manual input.</div>
         </div>
-
-        <div class=\"tile\" style=\"margin-top:10px;\">
+        <div class="tile" style="margin-top:10px;">
           <strong>Voice Assistant Intake</strong>
-          <div id=\"voiceStatus\">Status: idle</div>
-          <div id=\"voiceQuestion\">Question: --</div>
-          <div id=\"voiceAnswer\">Last answer: --</div>
-          <div id=\"voiceEngine\">Voice: detecting female voice...</div>
-          <div style=\"font-size:12px;color:#4f6f79;\">Assistant starts automatically on page open, asks required questions, and keeps helping until user says stop/exit.</div>
+          <div id="voiceStatus">Status: idle</div>
+          <div id="voiceQuestion">Question: --</div>
+          <div id="voiceAnswer">Last answer: --</div>
+          <div id="voiceEngine">Voice: detecting female voice...</div>
+          <div id="voiceResult" style="margin-top:8px;font-size:13px;line-height:1.5;color:#12323d;">Result: waiting for voice analysis.</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+            <input id="voiceTextInput" type="text" placeholder="Type answer or question here if mic does not work" style="flex:1;min-width:220px;padding:10px;border:1px solid #cde4dc;border-radius:10px;" />
+            <button class="btn secondary" type="button" id="sendVoiceTextBtn">Send Answer</button>
+            <button class="btn secondary" type="button" id="repeatVoiceBtn">Repeat Prompt</button>
+          </div>
+          <div style="font-size:12px;color:#4f6f79;">Press Start to begin. If microphone does not work, type the answer or question here and press Send Answer.</div>
         </div>
       </article>
     </section>
@@ -397,6 +402,9 @@ HTML = """
     const voiceAnswer = document.getElementById("voiceAnswer");
     const voiceEngine = document.getElementById("voiceEngine");
     const voiceResult = document.getElementById("voiceResult");
+    const voiceTextInput = document.getElementById("voiceTextInput");
+    const sendVoiceTextBtn = document.getElementById("sendVoiceTextBtn");
+    const repeatVoiceBtn = document.getElementById("repeatVoiceBtn");
     const analyzeBtn = document.getElementById("analyzeBtn");
     const mainForm = document.getElementById("mainForm");
     const startPassiveBtn = document.getElementById("startPassiveBtn");
@@ -565,6 +573,56 @@ HTML = """
       return result;
     }
 
+    async function processVoiceTranscript(transcript) {
+      if (!voiceRunning) return;
+      const cleaned = (transcript || "").trim();
+      answerCaptured = cleaned.length > 0;
+      voiceAnswer.textContent = `Last answer: ${cleaned || "(empty)"}`;
+
+      if (voiceMode === "intake") {
+        const item = voiceFlow[voiceIndex];
+        const accepted = item && cleaned ? applyVoiceAnswer(item.field, cleaned) : false;
+        if (!accepted && item && item.required) {
+          voiceRetries += 1;
+          if (voiceRetries <= maxVoiceRetries) {
+            voiceAnswer.textContent = "Last answer: not clear, asking again";
+            await repeatCurrentQuestion(`Status: waiting for a clear answer to question ${voiceIndex + 1}/${voiceFlow.length}`);
+            return;
+          }
+        }
+        if (!accepted && item && !item.required) {
+          voiceAnswer.textContent = "Last answer: skipped";
+        }
+        await movePastCurrentQuestion();
+        return;
+      }
+
+      const low = cleaned.toLowerCase();
+      if (low.includes("stop assistant") || low.includes("stop voice") || low.includes("exit")) {
+        stopVoiceIntake(true);
+        await speakText("Voice assistant stopped.");
+        return;
+      }
+
+      if (cleaned) appendToQuery(cleaned);
+      try {
+        const result = await analyzeVoiceCase();
+        const reply = buildAssistantReply(cleaned, result);
+        voiceStatus.textContent = "Status: processed input and answered your question";
+        if (voiceResult) voiceResult.textContent = `Result: ${reply}`;
+        await speakText(reply);
+      } catch (error) {
+        voiceStatus.textContent = "Status: processed input but analysis failed";
+        if (voiceResult) voiceResult.textContent = "Result: analysis failed for the latest input.";
+        await speakText("I heard you, but I could not finish the analysis right now.");
+      }
+      if (voiceRecognition) {
+        setTimeout(() => {
+          if (voiceRunning) listenNow();
+        }, 1200);
+      }
+    }
+
     function pickLadyVoice() {
       if (!("speechSynthesis" in window)) return null;
       const voices = window.speechSynthesis.getVoices() || [];
@@ -658,8 +716,13 @@ HTML = """
       const item = voiceFlow[voiceIndex];
       voiceQuestion.textContent = `Question: ${item.question}`;
       voiceStatus.textContent = `Status: intake question ${voiceIndex + 1}/${voiceFlow.length}`;
+      if (voiceTextInput) voiceTextInput.placeholder = item.question;
       await speakText(item.question);
-      listenNow();
+      if (voiceRecognition) {
+        listenNow();
+      } else {
+        voiceStatus.textContent = `Status: intake question ${voiceIndex + 1}/${voiceFlow.length}. Type the answer below or use a supported voice browser.`;
+      }
     }
 
     async function repeatCurrentQuestion(reasonText) {
@@ -668,8 +731,11 @@ HTML = """
       if (!item) return;
       voiceStatus.textContent = reasonText || `Status: repeating question ${voiceIndex + 1}/${voiceFlow.length}`;
       voiceQuestion.textContent = `Question: ${item.question}`;
+      if (voiceTextInput) voiceTextInput.placeholder = item.question;
       await speakText(`I did not catch that clearly. ${item.question} You can also say skip.`);
-      listenNow();
+      if (voiceRecognition) {
+        listenNow();
+      }
     }
 
     async function movePastCurrentQuestion() {
@@ -687,8 +753,11 @@ HTML = """
       voiceMode = "assistant";
       voiceQuestion.textContent = "Question: Ask me anything about your result, medicine, doctor, risk, or new symptoms. Say stop assistant to end.";
       voiceStatus.textContent = "Status: always-on voice assistant active";
+      if (voiceTextInput) voiceTextInput.placeholder = "Ask about result, medicine, risk, doctor, or type new symptoms";
       await speakText("Voice assistant is active. You can ask about your result, medicine, doctor, risk, mental health, or tell me new symptoms anytime.");
-      listenNow();
+      if (voiceRecognition) {
+        listenNow();
+      }
     }
 
     function stopVoiceIntake(updateStatus = true) {
@@ -721,8 +790,18 @@ HTML = """
     async function startVoiceIntake(autoStart = false, startMode = "intake") {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) {
-        voiceStatus.textContent = "Status: speech recognition not supported in this browser";
-        return false;
+        voiceRecognition = null;
+        voiceRunning = true;
+        voiceMode = startMode === "intake" ? "intake" : "assistant";
+        voiceIndex = 0;
+        voiceRetries = 0;
+        voiceStatus.textContent = "Status: voice recognition not supported here. Type your answers below and press Send Answer.";
+        if (voiceMode === "intake") {
+          await askNextVoiceQuestion();
+        } else {
+          await switchToAssistantMode();
+        }
+        return true;
       }
 
       if (!voiceRecognition) {
@@ -736,51 +815,7 @@ HTML = """
           recognitionActive = false;
           if (!voiceRunning) return;
           const transcript = (event.results[0][0].transcript || "").trim();
-          answerCaptured = transcript.length > 0;
-          voiceAnswer.textContent = `Last answer: ${transcript || "(empty)"}`;
-
-          if (voiceMode === "intake") {
-            const item = voiceFlow[voiceIndex];
-            const accepted = item && transcript ? applyVoiceAnswer(item.field, transcript) : false;
-            if (!accepted && item && item.required) {
-              voiceRetries += 1;
-              if (voiceRetries <= maxVoiceRetries) {
-                voiceAnswer.textContent = "Last answer: not clear, asking again";
-                await repeatCurrentQuestion(`Status: waiting for a clear answer to question ${voiceIndex + 1}/${voiceFlow.length}`);
-                return;
-              }
-            }
-            if (!accepted && item && !item.required) {
-              voiceAnswer.textContent = "Last answer: skipped";
-            }
-            await movePastCurrentQuestion();
-            return;
-          }
-
-          let spoken = transcript;
-          let low = transcript.toLowerCase();
-
-          if (low.includes("stop assistant") || low.includes("stop voice") || low.includes("exit")) {
-            stopVoiceIntake(true);
-            await speakText("Voice assistant stopped.");
-            return;
-          }
-
-          if (spoken) appendToQuery(spoken);
-          try {
-            const result = await analyzeVoiceCase();
-            const reply = buildAssistantReply(transcript, result);
-            voiceStatus.textContent = "Status: processed voice input and answered your question";
-            if (voiceResult) voiceResult.textContent = `Result: ${reply}`;
-            await speakText(reply);
-          } catch (error) {
-            voiceStatus.textContent = "Status: processed voice input but analysis failed";
-            if (voiceResult) voiceResult.textContent = "Result: analysis failed for the latest voice input.";
-            await speakText("I heard you, but I could not finish the analysis right now.");
-          }
-          setTimeout(() => {
-            if (voiceRunning) listenNow();
-          }, 1200);
+          await processVoiceTranscript(transcript);
         };
 
         voiceRecognition.onerror = async (event) => {
@@ -1067,6 +1102,48 @@ HTML = """
     if (testLadyVoiceBtn) {
       testLadyVoiceBtn.addEventListener("click", async () => {
         await speakText("Hello, I am your MediAssist lady voice assistant. I am ready to help you.");
+      });
+    }
+
+    async function sendTypedVoiceInput() {
+      if (!voiceRunning) {
+        await startVoiceFromButton();
+      }
+      const transcript = (voiceTextInput?.value || "").trim();
+      if (!transcript) {
+        voiceStatus.textContent = "Status: type an answer or question first.";
+        return;
+      }
+      if (voiceTextInput) voiceTextInput.value = "";
+      await processVoiceTranscript(transcript);
+    }
+
+    if (sendVoiceTextBtn) {
+      sendVoiceTextBtn.addEventListener("click", async () => {
+        await sendTypedVoiceInput();
+      });
+    }
+
+    if (voiceTextInput) {
+      voiceTextInput.addEventListener("keydown", async (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          await sendTypedVoiceInput();
+        }
+      });
+    }
+
+    if (repeatVoiceBtn) {
+      repeatVoiceBtn.addEventListener("click", async () => {
+        if (!voiceRunning) {
+          await startVoiceFromButton();
+          return;
+        }
+        if (voiceMode === "intake") {
+          await repeatCurrentQuestion("Status: repeating current question");
+        } else {
+          await speakText("You can ask me about your result, doctor, medicine, risk, emergency care, or tell me new symptoms.");
+        }
       });
     }
 
