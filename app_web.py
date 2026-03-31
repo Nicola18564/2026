@@ -217,7 +217,22 @@ HTML = """
     .alert { margin-top: 10px; border: 1px solid #f5c2c2; background: #fff2f2; color: #8a1717; border-radius: 10px; padding: 10px; font-weight: 700; }
     .safe { margin-top: 10px; border: 1px solid #b8e4dc; background: #effaf8; color: var(--ok); border-radius: 10px; padding: 10px; font-weight: 700; }
 
+    .report-overlay { position: fixed; inset: 0; background: rgba(18, 50, 61, 0.56); display: none; align-items: center; justify-content: center; padding: 18px; z-index: 2000; }
+    .report-overlay.open { display: flex; }
+    .report-card { width: min(980px, 100%); max-height: 90vh; overflow-y: auto; background: #ffffff; border-radius: 22px; border: 1px solid var(--line); box-shadow: 0 24px 60px rgba(18, 50, 61, 0.25); padding: 22px; }
+    .report-top { display: flex; justify-content: space-between; gap: 12px; align-items: start; margin-bottom: 16px; }
+    .report-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .report-section { border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: #fbfffd; }
+    .report-section.full { grid-column: 1 / -1; }
+    .report-section h3 { margin: 0 0 8px; font-size: 1rem; font-family: Sora, Outfit, sans-serif; }
+    .report-line { margin: 6px 0; color: var(--muted); }
+    .report-note { margin-top: 12px; font-size: 12px; color: var(--muted); }
+
     ul { margin: 6px 0 0 18px; padding: 0; }
+
+    @media (max-width: 680px) {
+      .report-grid { grid-template-columns: 1fr; }
+    }
 
     @media (max-width: 1020px) {
       .layout { grid-template-columns: 1fr; }
@@ -388,6 +403,49 @@ HTML = """
         </div>
       </article>
     </section>
+
+    <div id="voiceReportOverlay" class="report-overlay" aria-hidden="true">
+      <div class="report-card">
+        <div class="report-top">
+          <div>
+            <span class="kicker">Voice Analysis Report</span>
+            <h2 id="reportTitle" style="margin-top:10px;">Clinical Result</h2>
+            <p id="reportSubtitle" class="sub">Structured result after assistant intake.</p>
+          </div>
+          <button class="btn secondary" type="button" id="closeVoiceReportBtn">Close Report</button>
+        </div>
+        <div class="report-grid">
+          <div class="report-section">
+            <h3>Clinical Impression</h3>
+            <div id="reportImpression" class="report-line">Waiting for analysis.</div>
+            <div id="reportTriage" class="report-line"></div>
+            <div id="reportConfidence" class="report-line"></div>
+          </div>
+          <div class="report-section">
+            <h3>Prescription-Style Care Plan</h3>
+            <ul id="reportPrescription"></ul>
+          </div>
+          <div class="report-section">
+            <h3>Doctor Recommendation</h3>
+            <div id="reportDoctor" class="report-line"></div>
+            <div id="reportRisk" class="report-line"></div>
+          </div>
+          <div class="report-section">
+            <h3>Monitoring</h3>
+            <ul id="reportMonitoring"></ul>
+          </div>
+          <div class="report-section full">
+            <h3>Step-by-Step Guidance</h3>
+            <ul id="reportGuidance"></ul>
+          </div>
+          <div class="report-section full">
+            <h3>Precautions and Red Flags</h3>
+            <ul id="reportRedFlags"></ul>
+          </div>
+        </div>
+        <div class="report-note">Demo medical assistant output for educational presentation use. Final prescriptions and diagnosis should be confirmed by a licensed clinician.</div>
+      </div>
+    </div>
   </main>
   <script>
     const cameraBtn = document.getElementById("cameraPulseBtn");
@@ -407,6 +465,19 @@ HTML = """
     const repeatVoiceBtn = document.getElementById("repeatVoiceBtn");
     const analyzeBtn = document.getElementById("analyzeBtn");
     const mainForm = document.getElementById("mainForm");
+    const voiceReportOverlay = document.getElementById("voiceReportOverlay");
+    const closeVoiceReportBtn = document.getElementById("closeVoiceReportBtn");
+    const reportTitle = document.getElementById("reportTitle");
+    const reportSubtitle = document.getElementById("reportSubtitle");
+    const reportImpression = document.getElementById("reportImpression");
+    const reportTriage = document.getElementById("reportTriage");
+    const reportConfidence = document.getElementById("reportConfidence");
+    const reportPrescription = document.getElementById("reportPrescription");
+    const reportDoctor = document.getElementById("reportDoctor");
+    const reportRisk = document.getElementById("reportRisk");
+    const reportMonitoring = document.getElementById("reportMonitoring");
+    const reportGuidance = document.getElementById("reportGuidance");
+    const reportRedFlags = document.getElementById("reportRedFlags");
     const startPassiveBtn = document.getElementById("startPassiveBtn");
     const stopPassiveBtn = document.getElementById("stopPassiveBtn");
     const passiveStatus = document.getElementById("passiveStatus");
@@ -517,12 +588,49 @@ HTML = """
       return payload;
     }
 
+    function renderList(target, items, fallback) {
+      if (!target) return;
+      const values = items && items.length ? items : [fallback];
+      target.innerHTML = values.map((item) => `<li>${item}</li>`).join('');
+    }
+
+    function buildPrescriptionLines(result) {
+      const meds = result.care_plan.medication_suggestions || [];
+      const disease = result.analysis.disease;
+      const lines = meds.map((med, index) => `Rx ${index + 1}: ${med} - use only with clinician/pharmacist confirmation.`);
+      lines.push(`Condition focus: ${disease}. Follow the step-by-step guidance and reassess symptoms if they worsen.`);
+      return lines;
+    }
+
+    function openVoiceReport(result) {
+      if (!voiceReportOverlay) return;
+      reportTitle.textContent = `Clinical Result: ${result.analysis.disease}`;
+      reportSubtitle.textContent = `Prepared after assistant intake for ${result.patient_profile.region || 'your area'}.`;
+      reportImpression.textContent = result.analysis.summary;
+      reportTriage.textContent = `Triage: ${result.analysis.triage.status} - ${result.analysis.triage.message}`;
+      reportConfidence.textContent = `Confidence: ${result.analysis.confidence}%`;
+      reportDoctor.textContent = result.care_plan.doctor_recommendation;
+      reportRisk.textContent = `Risk: ${result.care_plan.risk_prediction.level} (${result.care_plan.risk_prediction.score}%) - ${result.care_plan.risk_prediction.advice}`;
+      renderList(reportPrescription, buildPrescriptionLines(result), 'No prescription-style plan available.');
+      renderList(reportMonitoring, result.care_plan.monitoring_alerts, 'No monitoring alerts available.');
+      renderList(reportGuidance, result.care_plan.step_by_step_guidance, 'No guidance available.');
+      renderList(reportRedFlags, result.analysis.red_flags, 'No major red flags detected from current input.');
+      voiceReportOverlay.classList.add('open');
+      voiceReportOverlay.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeVoiceReport() {
+      if (!voiceReportOverlay) return;
+      voiceReportOverlay.classList.remove('open');
+      voiceReportOverlay.setAttribute('aria-hidden', 'true');
+    }
+
     function buildVoiceSummary(result) {
       const disease = result.analysis.disease;
       const risk = result.care_plan.risk_prediction.level;
       const score = result.care_plan.risk_prediction.score;
       const doctor = result.care_plan.doctor_recommendation;
-      return `Result: ${disease}. Risk ${risk} at ${score} percent. ${doctor}`;
+      return `Clinical impression: ${disease}. Risk ${risk} at ${score} percent. ${doctor}`;
     }
 
     function buildAssistantReply(transcript, result) {
@@ -569,6 +677,7 @@ HTML = """
       if (voiceResult) {
         voiceResult.textContent = `${spoken} Guidance: ${result.analysis.summary}`;
       }
+      openVoiceReport(result);
       await speakText(`${spoken} ${result.analysis.summary}`);
       return result;
     }
@@ -785,6 +894,7 @@ HTML = """
       voiceAnswer.textContent = "Last answer: --";
       voiceQuestion.textContent = "Question: preparing intake...";
       if (voiceResult) voiceResult.textContent = "Result: waiting for voice analysis.";
+      closeVoiceReport();
     }
 
     async function startVoiceIntake(autoStart = false, startMode = "intake") {
@@ -1147,6 +1257,20 @@ HTML = """
       });
     }
 
+    if (closeVoiceReportBtn) {
+      closeVoiceReportBtn.addEventListener("click", () => {
+        closeVoiceReport();
+      });
+    }
+
+    if (voiceReportOverlay) {
+      voiceReportOverlay.addEventListener("click", (event) => {
+        if (event.target === voiceReportOverlay) {
+          closeVoiceReport();
+        }
+      });
+    }
+
     window.addEventListener("load", () => {
       initVoiceEngine();
       if ("speechSynthesis" in window) {
@@ -1156,7 +1280,8 @@ HTML = """
       }
       voiceStatus.textContent = "Status: ready. Press Start Lady Voice Assistant to begin the full intake.";
       voiceQuestion.textContent = "Question: press Start Lady Voice Assistant";
-      if (voiceResult) voiceResult.textContent = "Result: after intake, I will analyze the answers and speak the result.";
+      if (voiceResult) voiceResult.textContent = "Result: after intake, I will analyze the answers, open the report, and speak the result.";
+      closeVoiceReport();
     });
   </script>
 </body>
