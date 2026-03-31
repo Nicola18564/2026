@@ -396,6 +396,7 @@ HTML = """
     const voiceQuestion = document.getElementById("voiceQuestion");
     const voiceAnswer = document.getElementById("voiceAnswer");
     const voiceEngine = document.getElementById("voiceEngine");
+    const voiceResult = document.getElementById("voiceResult");
     const analyzeBtn = document.getElementById("analyzeBtn");
     const mainForm = document.getElementById("mainForm");
     const startPassiveBtn = document.getElementById("startPassiveBtn");
@@ -471,6 +472,43 @@ HTML = """
       if (!target) return;
       const prev = (target.value || "").trim();
       target.value = prev ? `${prev}. ${text}` : text;
+    }
+
+    function formPayload() {
+      const payload = {};
+      if (!mainForm) return payload;
+      const formData = new FormData(mainForm);
+      for (const [key, value] of formData.entries()) {
+        payload[key] = value;
+      }
+      payload.symptoms = payload.query || "";
+      return payload;
+    }
+
+    function buildVoiceSummary(result) {
+      const disease = result.analysis.disease;
+      const risk = result.care_plan.risk_prediction.level;
+      const score = result.care_plan.risk_prediction.score;
+      const doctor = result.care_plan.doctor_recommendation;
+      return `Result: ${disease}. Risk ${risk} at ${score} percent. ${doctor}`;
+    }
+
+    async function analyzeVoiceCase() {
+      if (!mainForm) return null;
+      voiceStatus.textContent = "Status: analyzing voice answers...";
+      if (voiceResult) voiceResult.textContent = "Result: analyzing current answers...";
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formPayload()),
+      });
+      const result = await response.json();
+      const spoken = buildVoiceSummary(result);
+      if (voiceResult) {
+        voiceResult.textContent = `${spoken} Guidance: ${result.analysis.summary}`;
+      }
+      await speakText(`${spoken} ${result.analysis.summary}`);
+      return result;
     }
 
     function pickLadyVoice() {
@@ -549,9 +587,15 @@ HTML = """
     async function askNextVoiceQuestion() {
       if (!voiceRunning || voiceMode !== "intake") return;
       if (voiceIndex >= voiceFlow.length) {
-        voiceStatus.textContent = "Status: intake complete. Running analysis and staying active...";
-        await speakText("Thank you. I am analyzing your answers now and preparing solutions.");
-        if (mainForm && analyzeBtn) mainForm.requestSubmit(analyzeBtn);
+        voiceStatus.textContent = "Status: intake complete. Running analysis and speaking result...";
+        await speakText("Thank you. I am analyzing your answers now.");
+        try {
+          await analyzeVoiceCase();
+        } catch (error) {
+          voiceStatus.textContent = "Status: analysis failed";
+          if (voiceResult) voiceResult.textContent = "Result: unable to analyze the voice answers right now.";
+          await speakText("I could not analyze the result right now. Please tap analyze once.");
+        }
         await switchToAssistantMode();
         return;
       }
@@ -568,7 +612,7 @@ HTML = """
       voiceMode = "assistant";
       voiceQuestion.textContent = "Question: Tell me your new symptoms anytime. Say 'stop assistant' to end.";
       voiceStatus.textContent = "Status: always-on voice assistant active";
-      await speakText("Voice assistant is active. Tell me your symptoms anytime.");
+      await speakText("Voice assistant is active. Tell me your new symptoms anytime and I will analyze the result.");
       listenNow();
     }
 
@@ -629,8 +673,14 @@ HTML = """
           }
 
           if (spoken) appendToQuery(spoken);
-          if (mainForm && analyzeBtn) mainForm.requestSubmit(analyzeBtn);
-          voiceStatus.textContent = "Status: processed voice input, still listening";
+          try {
+            await analyzeVoiceCase();
+            voiceStatus.textContent = "Status: processed voice input and announced result";
+          } catch (error) {
+            voiceStatus.textContent = "Status: processed voice input but analysis failed";
+            if (voiceResult) voiceResult.textContent = "Result: analysis failed for the latest voice input.";
+            await speakText("I heard you, but I could not finish the analysis right now.");
+          }
           setTimeout(() => {
             if (voiceRunning) listenNow();
           }, 1200);
@@ -1158,6 +1208,13 @@ def _device_vitals_plan(form: dict, result: dict) -> dict:
         )
 
     return {"status": status, "points": points}
+
+
+@app.post("/api/analyze")
+def api_analyze():
+    data = request.get_json(silent=True) or {}
+    result = build_response(data)
+    return jsonify(result)
 
 
 @app.post("/api/passive_monitor")
