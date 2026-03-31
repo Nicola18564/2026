@@ -628,6 +628,7 @@ HTML = """
     function listenNow() {
       if (!voiceRunning || !voiceRecognition || recognitionActive) return;
       answerCaptured = false;
+      voiceStatus.textContent = voiceMode === "intake" ? `Status: listening for question ${voiceIndex + 1}/${voiceFlow.length}` : "Status: listening for your question";
       try {
         voiceRecognition.start();
         recognitionActive = true;
@@ -694,6 +695,7 @@ HTML = """
       voiceRunning = false;
       recognitionActive = false;
       pendingAutoStart = false;
+      voiceRetries = 0;
       if (voiceRecognition) {
         try {
           voiceRecognition.stop();
@@ -706,6 +708,14 @@ HTML = """
         voiceStatus.textContent = "Status: stopped";
       }
       voiceQuestion.textContent = "Question: --";
+    }
+
+    function resetVoiceAssistantUi() {
+      voiceIndex = 0;
+      voiceRetries = 0;
+      voiceAnswer.textContent = "Last answer: --";
+      voiceQuestion.textContent = "Question: preparing intake...";
+      if (voiceResult) voiceResult.textContent = "Result: waiting for voice analysis.";
     }
 
     async function startVoiceIntake(autoStart = false, startMode = "intake") {
@@ -777,9 +787,10 @@ HTML = """
           recognitionActive = false;
           if (!voiceRunning) return;
 
-          if (autoStart && (event.error === "not-allowed" || event.error === "service-not-allowed")) {
-            pendingAutoStart = true;
-            voiceStatus.textContent = "Status: mic permission needed. Tap anywhere once to enable always-on voice.";
+          if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+            pendingAutoStart = false;
+            voiceStatus.textContent = "Status: microphone permission blocked. Allow microphone access and press Start Lady Voice Assistant again.";
+            if (voiceResult) voiceResult.textContent = "Result: microphone permission is required for voice assistant.";
             return;
           }
 
@@ -1022,13 +1033,24 @@ HTML = """
       });
     }
 
+    async function startVoiceFromButton() {
+      stopVoiceIntake(false);
+      pendingAutoStart = false;
+      resetVoiceAssistantUi();
+      initVoiceEngine();
+      voiceStatus.textContent = "Status: starting intake. Please allow microphone access if prompted.";
+      await startVoiceIntake(false, "intake");
+    }
+
     if (startVoiceBtn) {
       startVoiceBtn.addEventListener("click", async () => {
         startVoiceBtn.disabled = true;
-        startVoiceBtn.textContent = "Listening...";
+        startVoiceBtn.textContent = "Starting...";
         try {
-          pendingAutoStart = false;
-          await startVoiceIntake(false);
+          await startVoiceFromButton();
+        } catch (e) {
+          voiceStatus.textContent = "Status: unable to start voice assistant.";
+          if (voiceResult) voiceResult.textContent = "Result: could not start the voice assistant. Check microphone permission and browser support.";
         } finally {
           startVoiceBtn.disabled = false;
           startVoiceBtn.textContent = "Start Lady Voice Assistant";
@@ -1048,12 +1070,6 @@ HTML = """
       });
     }
 
-    async function autoStartVoiceAssistant() {
-      if (voiceRunning) return;
-      pendingAutoStart = true;
-      await startVoiceIntake(true, "intake");
-    }
-
     window.addEventListener("load", () => {
       initVoiceEngine();
       if ("speechSynthesis" in window) {
@@ -1061,22 +1077,10 @@ HTML = """
           initVoiceEngine();
         };
       }
-      setTimeout(() => {
-        autoStartVoiceAssistant().catch(() => {});
-      }, 900);
+      voiceStatus.textContent = "Status: ready. Press Start Lady Voice Assistant to begin the full intake.";
+      voiceQuestion.textContent = "Question: press Start Lady Voice Assistant";
+      if (voiceResult) voiceResult.textContent = "Result: after intake, I will analyze the answers and speak the result.";
     });
-
-    const unlockVoiceOnce = async () => {
-      if (!pendingAutoStart || voiceRunning) return;
-      pendingAutoStart = false;
-      await startVoiceIntake(false, "intake");
-      document.removeEventListener("click", unlockVoiceOnce);
-      document.removeEventListener("keydown", unlockVoiceOnce);
-      document.removeEventListener("touchstart", unlockVoiceOnce);
-    };
-    document.addEventListener("click", unlockVoiceOnce);
-    document.addEventListener("keydown", unlockVoiceOnce);
-    document.addEventListener("touchstart", unlockVoiceOnce);
   </script>
 </body>
 </html>
