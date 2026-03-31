@@ -1,0 +1,8 @@
+[project]
+name = "mediassist-openenv"
+version = "0.1.0"
+description = "MediAssist OpenEnv deployment config"
+requires-python = ">=3.11,<3.13"
+
+[project.scripts]
+app = "app_web:app"

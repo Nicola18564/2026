@@ -64,3 +64,28 @@ Open: `http://127.0.0.1:5000`
 ## Important Note
 
 This project is for educational and demo use only. It is not a replacement for licensed medical care.
+
+
+## Deploy app_web.py on Vercel
+
+This repo is configured so Vercel can target `app_web.py` as the Flask application entrypoint.
+
+Local test:
+
+```bash
+pip install -r requirements.txt
+python app_web.py
+```
+
+Vercel deploy:
+
+```bash
+vercel
+```
+
+Production deploy:
+
+```bash
+vercel --prod
+```
+
